@@ -10,7 +10,7 @@
     become_user: mqm 
     shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -create \
         -db {{ keypath }} \
-        -label {{ cert_name }} \
+        -label {{ cert_label }} \
         -dn \"cn={{ queuemgr }},O=IBM\" \
         -size 2048 \
         -x509version 3 \
@@ -23,12 +23,12 @@
     become_user: mqm
     shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -extract \
         -db {{ keypath }} \
-        -label {{ cert_name }} \
-        -target /tmp/{{ cert_name }}.txt \
+        -label {{ cert_label }} \
+        -target /tmp/{{ cert_label }}.txt \
         -stashed"
 
   - name: Stick the contents of that file into a registered var
-    shell: "cat /tmp/{{ cert_name }}.txt"
+    shell: "cat /tmp/{{ cert_label }}.txt"
     register: cert_body
 
   - set_fact: 
@@ -76,7 +76,7 @@
 
           The following cert has been added:
 
-          - Cert Label: `{{ cert_name }}`
+          - Cert Label: `{{ cert_label }}`
           - KeyStore: `{{ keypath }}`
           - Queue Manager: `{{ queuemgr }}`
           - Host: `{{ inventory_hostname }}`
@@ -91,9 +91,9 @@
 
   - name: Clean up the temporary cert file we created
     file:
-      path: "/tmp/{{ cert_name }}.txt"
+      path: "/tmp/{{ cert_label }}.txt"
       state: absent
   when: 
     - "'primary' in mq_role and keyfile_exists.stat.exists"
-    - "cert_name is defined and cert_name|length > 0"
-    - "cert_name not in personal_cert_list"
+    - "cert_label is defined and cert_label|length > 0"
+    - "cert_label not in personal_cert_list"

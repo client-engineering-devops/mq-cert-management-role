@@ -8,9 +8,9 @@
   block:
   - name: create our cert signing request
     become_user: mqm 
-    shell: "{{ MQM_BIN_PATH }}/runmqakm -certreq -create -db {{ keypath }} -label {{ cert_name }} -sig_alg {{ sig_alg }} -type cms -dn 'cn=client.thinkforward.cloud,O=IBM,C=US' -size 2048 -san_dnsname {{ domain_name }} -file /tmp/{{ cert_name }}.csr -stashed"
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -certreq -create -db {{ keypath }} -label {{ cert_label }} -sig_alg {{ sig_alg }} -type cms -dn 'cn=client.thinkforward.cloud,O=IBM,C=US' -size 2048 -san_dnsname {{ domain_name }} -file /tmp/{{ cert_label }}.csr -stashed"
     when: 
-      - cert_name is defined and cert_name|length > 0
-      - cert_name not in csr_list
+      - cert_label is defined and cert_label|length > 0
+      - cert_label not in csr_list
 
   when: "'primary' in mq_role and keyfile_exists.stat.exists"
