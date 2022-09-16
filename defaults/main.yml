@@ -1,8 +1,5 @@
 ---
 # defaults file for mq-cert-management
-queue_dict: 
-  - { queuemgr: "DRHAQM1", type: "rdqm" }
-  - { queuemgr: "DBHAQM2", type: "rdqm" }
 
 MQM_BIN_PATH: "/opt/mqm/bin"
 
