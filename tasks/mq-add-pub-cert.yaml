@@ -1,0 +1,109 @@
+
+- name: Make sure the keyfile exists
+  stat:
+    path: "{{ keypath }}"
+  register: keyfile_exists
+
+- name: Set some email vars
+  block:
+  - set_fact:
+      subject: "Cert label already exists in {{ keypath }} for queuemgr {{ queuemgr }} on {{ inventory_hostname }}"
+      body: "Cert {{ cert_label }} already in keystore"
+      cert_added: false
+    when:
+      - "cert_label in trusted_cert_list"
+
+  - name: Template the email
+    template:
+      src: templates/Cert-added.html.j2
+      dest: "/tmp/cert-added.html"
+
+  - name: Collect the output of our email template
+    shell: "cat /tmp/cert-added.html"
+    register: cert_added_body
+
+  - set_fact:
+      subject: "Cert label added to {{ keypath }} for queuemgr {{ queuemgr }} on {{ inventory_hostname }}"
+      body: "{{ cert_added_body.stdout }}"
+      cert_added: true
+    when:
+      - "cert_label not in trusted_cert_list"
+  when: 
+    - "'primary' in mq_role and keyfile_exists.stat.exists"
+    - "cert_label is defined and cert_label|length > 0"
+    - "cert_body is defined and cert_body|length > 0"
+
+- name: Add in a new public cert
+  block:
+  - name: Create a temporary file for this cert body
+    become_user: mqm 
+    copy:
+      content: "{{ cert_body }}"
+      dest: "/tmp/{{ cert_label }}.txt"
+
+  - name: Add the cert to the keydb
+    become_user: mqm 
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -add -db {{ keypath }} -label {{ cert_label }} -file /tmp/{{ cert_label }}.txt -format ascii -stashed"
+
+  - name: Clean up the temporary cert file we created
+    file:
+      path: "/tmp/{{ cert_label }}.txt"
+      state: absent
+
+  - name: Clean up our email template
+    file:
+      path: "/tmp/cert-added.html"
+      state: absent
+  when: 
+    - "'primary' in mq_role and keyfile_exists.stat.exists"
+    - "cert_label is defined and cert_label|length > 0"
+    - "cert_body is defined and cert_body|length > 0"
+    - "cert_label not in trusted_cert_list"
+
+- name: Send an email and update github issue
+  block:
+  - name: Email the user
+    become: false 
+    mail:
+      host: "{{ smtp_info.host }}"
+      port: "{{ smtp_info.port }}"
+      username: "{{ smtp_info.user }}"
+      password: "{{ smtp_info.pass }}"
+      to: "{{ email_address }}"
+      subtype: html
+      subject: "{{ subject }}"
+      body: "{{ body }}"
+      from: "{{ smtp_info.from }}"
+    delegate_to: localhost
+
+  - name: Update the github issue to document what we did for this user
+    become: false 
+    uri:
+      url: "{{ github_repo }}/issues/{{ github_issue }}/comments"
+      method: POST
+      headers:
+        Authorization: "Bearer {{ github_access_token }}"
+      validate_certs: false
+      body_format: json
+      body:
+        body: |-
+          ** Added Public Cert **
+
+          The following trusted cert has been added:
+
+          - Cert Label: `{{ cert_label }}`
+          - KeyStore: `{{ keypath }}`
+          - Queue Manager: `{{ queuemgr }}`
+          - Host: `{{ inventory_hostname }}`
+
+          CERT
+          ```
+          {{ cert_body }}
+          ```
+      status_code: [200,201]
+    delegate_to: localhost
+    when: cert_added|bool == true
+  when: 
+    - "'primary' in mq_role and keyfile_exists.stat.exists"
+    - "subject is defined and subject|length > 0"
+    - "body is defined and body|length > 0"

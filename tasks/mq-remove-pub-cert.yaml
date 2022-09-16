@@ -1,0 +1,65 @@
+
+- name: Make sure the keyfile exists
+  stat:
+    path: "{{ keypath }}"
+  register: keyfile_exists
+
+- name: Remove a public trusted cert
+  block:
+  - name: Delete the cert in the keydb
+    become_user: mqm 
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -delete -db {{ keypath }} -label {{ cert_label }} -stashed"
+
+  - name: Template the email
+    template:
+      src: templates/pub_cert_removed.html.j2
+      dest: "/tmp/pub_cert_removed.html"
+
+  - name: Collect the output of our email template
+    shell: "cat /tmp/pub_cert_removed.html"
+    register: cert_removed_body
+
+  - set_fact:
+      subject: "Cert label removed from {{ keypath }} for queuemgr {{ queuemgr }} on {{ inventory_hostname }}"
+      body: "{{ cert_removed_body.stdout }}"
+
+  - name: Send an email letting the user know the cert was removed
+    become: false 
+    mail:
+      host: "{{ smtp_info.host }}"
+      port: "{{ smtp_info.port }}"
+      username: "{{ smtp_info.user }}"
+      password: "{{ smtp_info.pass }}"
+      to: "{{ email_address }}"
+      subject: "{{ subject }}"
+      subtype: html
+      body: "{{ body }}"
+      from: "{{ smtp_info.from }}"
+    delegate_to: localhost
+
+  - name: Update the github issue to document what we did for this user
+    become: false 
+    uri:
+      url: "{{ github_repo }}/issues/{{ github_issue }}/comments"
+      method: POST
+      headers:
+        Authorization: "Bearer {{ github_access_token }}"
+      validate_certs: false
+      body_format: json
+      body:
+        body: |-
+          ** Removed Public Cert **
+
+          The following cert has been removed:
+
+          - Cert Label: `{{ cert_label }}`
+          - KeyStore: `{{ keypath }}`
+          - Queue Manager: `{{ queuemgr }}`
+          - Host: `{{ inventory_hostname }}`
+
+      status_code: [200,201]
+    delegate_to: localhost
+  when:
+    - "'primary' in mq_role and keyfile_exists.stat.exists"
+    - "cert_label is defined and cert_label|length > 0"
+    - cert_label in trusted_cert_list

@@ -1,0 +1,99 @@
+
+- name: Make sure the keyfile exists
+  stat:
+    path: "{{ keypath }}"
+  register: keyfile_exists
+
+- name: Create a new cert
+  block:
+  - name: create our new cert
+    become_user: mqm 
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -create \
+        -db {{ keypath }} \
+        -label {{ cert_name }} \
+        -dn \"cn={{ queuemgr }},O=IBM\" \
+        -size 2048 \
+        -x509version 3 \
+        -expire {{ expire_time }} \
+        -sig_alg {{ sig_alg }} \
+        -type cms \
+        -stashed"
+
+  - name: Extract the public cert
+    become_user: mqm
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -extract \
+        -db {{ keypath }} \
+        -label {{ cert_name }} \
+        -target /tmp/{{ cert_name }}.txt \
+        -stashed"
+
+  - name: Stick the contents of that file into a registered var
+    shell: "cat /tmp/{{ cert_name }}.txt"
+    register: cert_body
+
+  - set_fact: 
+      cert_body: "{{ cert_body.stdout }}"
+
+  - name: Template the email
+    template:
+      src: templates/cert_private_created.html.j2
+      dest: "/tmp/cert_private_created.html"
+
+  - name: Collect the output of our email template
+    shell: "cat /tmp/cert_private_created.html"
+    register: cert_added_body
+
+  - set_fact:
+      subject: "Personal cert created in {{ keypath }} for queuemgr {{ queuemgr }} on {{ inventory_hostname }}"
+      body: "{{ cert_added_body.stdout }}"
+
+  - name: Send an email letting the user know the cert was extracted
+    become: false 
+    mail:
+      host: "{{ smtp_info.host }}"
+      port: "{{ smtp_info.port }}"
+      username: "{{ smtp_info.user }}"
+      password: "{{ smtp_info.pass }}"
+      to: "{{ email_address }}"
+      subject: "{{ subject }}"
+      subtype: html
+      body: "{{ body }}"
+      from: "{{ smtp_info.from }}"
+    delegate_to: localhost
+
+  - name: Update the github issue to document what we did for this user
+    become: false 
+    uri:
+      url: "{{ github_repo }}/issues/{{ github_issue }}/comments"
+      method: POST
+      headers:
+        Authorization: "Bearer {{ github_access_token }}"
+      validate_certs: false
+      body_format: json
+      body:
+        body: |-
+          ** Created Personal Cert on {{ inventory_hostname }} **
+
+          The following cert has been added:
+
+          - Cert Label: `{{ cert_name }}`
+          - KeyStore: `{{ keypath }}`
+          - Queue Manager: `{{ queuemgr }}`
+          - Host: `{{ inventory_hostname }}`
+
+          ** Public cert of the new personal certificate **
+          ```
+          {{ cert_body }}
+          ```
+
+      status_code: [200,201]
+    delegate_to: localhost
+
+  - name: Clean up the temporary cert file we created
+    file:
+      path: "/tmp/{{ cert_name }}.txt"
+      state: absent
+  when: 
+    - "'primary' in mq_role and keyfile_exists.stat.exists"
+    - "cert_name is defined and cert_name|length > 0"
+    - "cert_name not in personal_cert_list"

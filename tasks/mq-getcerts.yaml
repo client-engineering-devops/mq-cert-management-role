@@ -1,0 +1,40 @@
+
+- name: Make sure the keyfile exists
+  stat:
+    path: "{{ keypath }}"
+  register: keyfile_exists
+
+- name: Get our certs into an email
+  block:
+  - name: Template the email
+    template:
+      src: templates/cert_list_all.html.j2
+      dest: "/tmp/cert_list_all.html"
+
+  - name: Collect the output of our email template
+    shell: "cat /tmp/cert_list_all.html"
+    register: cert_list_body
+
+  - name: Clean up the template
+    file:
+      path: "/tmp/cert_list_all.html"
+      state: absent
+
+  - set_fact:
+      body: "{{ cert_list_body.stdout }}"
+
+  - name: Send an email with a list of certs
+    become: false 
+    mail:
+      host: "{{ smtp_info.host }}"
+      port: "{{ smtp_info.port }}"
+      username: "{{ smtp_info.user }}"
+      password: "{{ smtp_info.pass }}"
+      to: "{{ email_address }}"
+      subject: "Cert Labels in {{ keypath }} for queuemgr {{ queuemgr }} on {{ inventory_hostname }}"
+      subtype: html
+      body: "{{ body }}"
+      from: "{{ smtp_info.from }}"
+    delegate_to: localhost
+
+  when: "'primary' in mq_role and keyfile_exists.stat.exists"

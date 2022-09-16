@@ -1,0 +1,33 @@
+---
+# tasks file for mq-cert-management
+- name: Collect info from queuemgr
+  import_tasks: mq-get-info.yaml
+  tags: default, getinfo, getpubcert, certremove, addpubcert, listexpires, createcert, getallcerts
+
+- name: Get cert list
+  import_tasks: mq-getcerts.yaml
+  tags: getallcerts
+
+- name: Get Expirations
+  import_tasks: mq-get-cert-expirations.yaml
+  tags: listexpires
+
+- name: Create new personal cert
+  import_tasks: mq-create-cert.yaml
+  tags: createcert
+
+- name: Create keystore
+  import_tasks: mq-create-keystore.yaml
+  tags: createkeystore
+
+- name: Extract and deliver public cert from keydb
+  import_tasks: mq-get-pub-cert.yaml
+  tags: getpubcert
+
+- name: Add new pub cert to keydb
+  import_tasks: mq-add-pub-cert.yaml
+  tags: addpubcert
+
+- name: Remove pub cert from keydb
+  import_tasks: mq-remove-pub-cert.yaml
+  tags: certremove

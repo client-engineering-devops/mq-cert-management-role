@@ -1,0 +1,39 @@
+
+- name: Make sure the keyfile exists
+  stat:
+    path: "{{ keypath }}"
+  register: keyfile_exists
+
+- name: Manage some certs
+  block:
+  - name: Template the email
+    template:
+      src: templates/cert-expires-list.html.j2
+      dest: "/tmp/cert-expirations.html"
+
+  - name: Collect the output of our email template
+    shell: "cat /tmp/cert-expirations.html"
+    register: cert_expires_body
+
+  - name: Clean up the template
+    file:
+      path: "/tmp/cert-expirations.html"
+      state: absent
+
+  - set_fact:
+      body: "{{ cert_expires_body.stdout }}"
+
+  - name: Send an email with a list of certs
+    become: false 
+    mail:
+      host: "{{ smtp_info.host }}"
+      port: "{{ smtp_info.port }}"
+      username: "{{ smtp_info.user }}"
+      password: "{{ smtp_info.pass }}"
+      to: "{{ email_address }}"
+      subject: "Cert Expiration dates in {{ keypath }} for queuemgr {{ queuemgr }} on {{ inventory_hostname }}"
+      subtype: html
+      body: "{{ body }}"
+      from: "{{ smtp_info.from }}"
+    delegate_to: localhost
+  when: "'primary' in mq_role and keyfile_exists.stat.exists"

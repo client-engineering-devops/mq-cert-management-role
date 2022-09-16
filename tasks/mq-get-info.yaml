@@ -1,0 +1,70 @@
+
+- name: Make sure the keyfile exists
+  stat:
+    path: "{{ keypath }}"
+  register: keyfile_exists
+
+#- set_fact:
+#    keyfile_exists: keyfile_exists.stat.exists
+
+- name: Collect some data to set up as vars
+  block:
+  - name: Get the current keyfile path in the queue manager
+    become_user: mqm
+    shell: "echo 'DISPLAY QMGR SSLKEYR' | {{ MQM_BIN_PATH }}/runmqsc {{ queuemgr }} -e | grep SSLKEYR | sed 's/SSLKEYR//g;s/[)(]//g;s/\\s//g'"
+    register: qmgr_sslkey
+
+  - name: Get the current cert label in the queue manager
+    become_user: mqm
+    shell: "echo 'DISPLAY QMGR CERTLABL' | runmqsc {{ queuemgr }} -e | grep CERTLABL | sed 's/CERTLABL//g;s/[)(]//g' | awk '{print $2}'"
+    register: qmgr_cert
+
+  - name: Set the key path in the queumgr as a fact
+    set_fact:
+      qmgr_sslkeypath: "{{ qmgr_sslkey.stdout_lines[0] }}"
+      qmgr_certlabl: "{{ qmgr_cert.stdout_lines[0] }}"
+    when: 
+      - qmgr_sslkey.stdout_lines|length > 0
+      - qmgr_cert.stdout_lines|length > 0
+
+  - name: Collect a list of trusted certs
+    become_user: mqm
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -list -db {{ keypath }} -stashed  | grep ^\\! | sed 's/\\!//g;s/^\\s//g'"
+    register: trusted_cert_list
+
+  - name: Collect a list of personal certs
+    become_user: mqm
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -list -db {{ keypath }} -stashed  | grep ^\\- | sed 's/\\-//g;s/^\\s//g'"
+    register: personal_cert_list
+
+  - name: Get a list of all certs with expirations
+    become_user: mqm 
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -list -expiry -db {{ keypath }} -stashed | grep 'Not After' -B 2 | grep -v 'Not Before' | sed 's/\\!//g;s/Not After ://g;s/^\\s//g;/--/d' | awk 'NR%2{printf \"%s :\",$0;next}{print;}'"
+    register: cert_expires
+
+  - name: Set an empty var for our csr list, in case it's empty
+    set_fact:
+      csr_list: ''
+
+  - name: Get a list of all CSRs that aren't signed yet
+    become_user: mqm
+    shell: "runmqakm -certreq -list -db defaultSSLKeyFile.kdb -stashed | egrep '^\\s' | sed 's/\\s//'"
+    register: csr_list_reg
+
+  - name: Set the output of our csr_list_reg var here unless its empty
+    set_fact:
+      csr_list: "{{ csr_list_reg.stdout_lines }}"
+    when: csr_list_reg.stdout_lines|length > 0
+
+  - name: Set the trusted cert list and the personal cert list as facts
+    set_fact:
+      trusted_cert_list: "{{ trusted_cert_list.stdout_lines|default([]) }}"
+      personal_cert_list: "{{ personal_cert_list.stdout_lines|default([]) }}"
+      cert_expires: "{{ cert_expires.stdout_lines|default([]) }}"
+
+  - debug: 
+      msg: Key path in {{ queuemgr }} on {{ inventory_hostname }} is {{ qmgr_sslkeypath }} with a certlabel of {{ qmgr_certlabl }}
+    when:
+      - qmgr_sslkeypath is defined and qmgr_certlabl is defined
+  when: 
+    - "'primary' in mq_role and keyfile_exists.stat.exists"

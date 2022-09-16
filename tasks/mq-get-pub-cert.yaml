@@ -1,0 +1,43 @@
+
+- name: Make sure the keyfile exists
+  stat:
+    path: "{{ keypath }}"
+  register: keyfile_exists
+
+- name: Extract the public cert and email it
+  block:
+  - name: Extract the public cert
+    become_user: mqm
+    shell: "{{ MQM_BIN_PATH }}/runmqakm -cert -extract -db {{ keypath }} -label {{ qmgr_certlabl }} -target /tmp/{{ qmgr_certlabl }}.txt -stashed"
+
+  - name: Stick the contents of that file into a registered var
+    shell: "cat /tmp/{{ qmgr_certlabl }}.txt"
+    register: certlabl_out
+
+  - set_fact: 
+      cert_labl: "{{ certlabl_out.stdout }}"
+
+  - name: Send an email letting the user know the cert was extracted
+    become: false 
+    mail:
+      host: "{{ smtp_info.host }}"
+      port: "{{ smtp_info.port }}"
+      username: "{{ smtp_info.user }}"
+      password: "{{ smtp_info.pass }}"
+      to: "{{ email_address }}"
+      subject: "Public Cert for queuemgr {{ queuemgr }} on {{ inventory_hostname }}"
+      body: |-
+         Cert Label Name: {{ qmgr_certlabl }}
+
+         {{ cert_labl }}
+      from: "{{ smtp_info.from }}"
+    delegate_to: localhost
+
+  - name: Clean up the temporary cert file we created
+    file:
+      path: "/tmp/{{ qmgr_certlabl }}.txt"
+      state: absent
+
+  when: 
+    - "'primary' in mq_role and keyfile_exists.stat.exists"
+    - "qmgr_certlabl is defined and qmgr_certlabl|length > 0"

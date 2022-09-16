@@ -1,0 +1,41 @@
+- block:
+  - name: Create some persistent config folders for certbot 
+    become: false
+    file:
+      path: 
+        - "{{ certbot_letsencrypt }}"
+        - "{{ certbot_letsencrypt_lib }}"
+      state: directory
+    delegate_to: localhost
+
+  - name: Template out the cloudflare secret file
+    become: false
+    template:
+      src: templates/cloudflare.ini.j2
+      dest: "{{ certbot_letsencrypt }}/cloudflare.ini"
+      mode: 0600
+    delegate_to: localhost
+
+
+  - name: Launch the Certbot container
+    become: false
+    docker_container:
+      name: certbot
+      image: "{{ certbot_container }}"
+      devices:
+        - "{{ certbot_letsencrypt }}:/etc/letsencrypt"
+        - "{{ certbot_letsencrypt_lib }}:/var/lib/letsencrypt"
+      command:
+        - "certbot certonly --dns-cloudflare --dns-cloudflare-credentials {{ certbot_letsencrypt }}/cloudflare.ini -d {{ domain_name }}"
+      detach: yes
+      interactive: yes
+      state: started
+    register: container_launch
+    changed_when: "'Conflict' not in container_launch.stderr"
+    ignore_errors: true
+    delegate_to: localhost
+
+  rescue:
+  - name: Delete the container to prevent orphaned containers
+    notify: destroy container
+    tags: certbot_destroy
