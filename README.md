@@ -213,19 +213,13 @@ sig_alg: "SHA256WithRSA"
 expire_time: 90
 ```
 
-We stored a lot of elements here in the global vars above. Primarily we do this so we can share the variables across multiple roles. These vars however can be very much localized into the role itself. 
+We stored a lot of elements here in the global vars above. Primarily we do this so we can share the variables across multiple roles. These vars however can be very much localized into the role itself via `vars/main.yaml` or `defaults/main.yaml`. 
 
 The important variables are `smtp_info` as these are the required vars for the `mail` module in ansible. This allows us to email out. Others are the `github_repo` path. This is necessary in order to update our associated github issue. The `github_issue` var and `email_address` var are just populated with default values that we overwrite with our `extra_vars`.
 
 Ansible vault encryption is how we are protecting our passwords and tokens. These entries are encrypted and are decrypted at run time using the ansible secret. That secret is typically stored in Tower or can be stored in a file to reference at run time when using the ansible-playbook command. Other vars like `sig_alg` and `expire_time` are also set to be default values to use when creating new certificates in the keystores.
 
-
-
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+Once again, any variable set here can be overwritten with the `extra-vars` flag when running via commandline.
 
 License
 -------
