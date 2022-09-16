@@ -221,6 +221,23 @@ Ansible vault encryption is how we are protecting our passwords and tokens. Thes
 
 Once again, any variable set here can be overwritten with the `extra-vars` flag when running via commandline.
 
+Local Vars: 
+
+In our defaults dir we set some default vars. Currently it would look like this:
+
+```
+---
+# defaults file for mq-cert-management
+
+MQM_BIN_PATH: "/opt/mqm/bin"
+
+company_url: "https://www.ibm.com"
+company_logo: "https://www.freepnglogos.com/uploads/ibm-logo-png/ibm-logo-png-transparent-svg-vector-bie-supply-3.png"
+```
+
+This lets us set a default URL and default company logo to use for our email templates. 
+
+
 License
 -------
 
