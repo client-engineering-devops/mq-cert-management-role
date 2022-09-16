@@ -29,6 +29,8 @@ queuemgr='<QUEUE MANAGER ON THIS CLUSTER>'
 keypath='/var/mqm/vols/<QM>/qmgr/<QM>/ssl/defaultSSLKeyFile.kdb'
 private_key_file=keys/<PATHTOSSHKEY>_pem
 load_balancer="<OUR REGIONAL LOADBALANCER FOR THIS CLUSTER>"
+## Add this line to inventory if using a bastion host as ssh proxy
+ansible_ssh_common_args='-l <USER> -i <path to ssh pem> -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -l <USER> -i <path to pem> -W %h:%p -q <BASTION HOST IP"'
 
 [dallas:vars]
 ansible_port=22
@@ -37,6 +39,8 @@ queuemgr='<QUEUE MANAGER ON THIS CLUSTER>'
 keypath='/var/mqm/vols/<QM>/qmgr/<QM>/ssl/defaultSSLKeyFile.kdb'
 private_key_file=keys/<PATHTOSSHKEY>_pem
 load_balancer="<OUR REGIONAL LOADBALANCER FOR THIS CLUSTER>"
+## Add this line to inventory if using a bastion host as ssh proxy
+ansible_ssh_common_args='-l <USER> -i <path to ssh pem> -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -l <USER> -i <path to pem> -W %h:%p -q <BASTION HOST IP"'
 ```
 
 In our example above, we define the hosts and we set a `primary` node for each cluster. This isn't conducive to failovers in this revision of the role.
@@ -45,10 +49,16 @@ We also set a `queuemgr` for each group as it's specific to that cluster. The mi
 
 Also in our example, ansible will connect as the root user. For future use, always configure a local user with the correct sudo permissions. This also necessitates the need to define a path to the ssh private key for ansible to use.
 
+The `ansible_ssh_common_args` is used for ansible to connect if you are using a bastion host and not running on the same secured network
+
+When importing this role, it's important to also note that it is useful to have the following
+
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+When running this role from a Tower environment or running from cmdline, the following vars are required and/or overwriteable:
+
+- 
 
 Dependencies
 ------------

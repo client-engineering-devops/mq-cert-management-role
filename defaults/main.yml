@@ -3,3 +3,6 @@
 queue_dict: 
   - { queuemgr: "DRHAQM1", type: "rdqm" }
   - { queuemgr: "DBHAQM2", type: "rdqm" }
+
+company_url: "https://www.ibm.com"
+company_logo: "https://www.freepnglogos.com/uploads/ibm-logo-png/ibm-logo-png-transparent-svg-vector-bie-supply-3.png"
