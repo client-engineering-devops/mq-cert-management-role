@@ -137,6 +137,90 @@ A list of other roles hosted on Galaxy should go here, plus any details in regar
 Example Playbook
 ----------------
 
+A typical example of using this role would be to first import it via ansible-galaxy and then point a playbook to it.
+
+An example entry in your requirements file in your roles directory:
+
+```
+- name MQ Certificate Management
+  src: https://github.com/client-engineering-devops/mq-cert-management-role.git
+  name: mq-cert-managment-role
+  scm: git
+  version: main
+```
+And our playbook would look like this:
+
+```
+- hosts: washington,dallas
+  become: true
+  become_user: root
+  gather_facts: true
+  roles:
+  - role: mq-cert-management-role
+```
+
+For our orchestrator we would want to set some group vars for this role, particularly ansible vault encrypted tokens or passwords. For our test environment we set our `group_vars/all/main.yaml` with the following variables:
+
+```
+smtp_info:
+  host: smtp.sendgrid.net
+  port: 465
+  user: apikey
+  pass: "{{ smtp_pass }}"
+  auth: true
+  from: "IBM Digital Business Automation on Cloud<noreply@bpm.ibmcloud.com>"
+
+email_address:
+  - Ross Kramer <kramerro@us.ibm.com>
+  - Faraz Ahmad <faraz@us.ibm.com>
+
+github_repo: "https://github.com/api/v3/repos/ibm-client-engineering/solution-mq-certificate-management"
+
+github_issue: "1"
+
+github_access_token: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          64333133313831313363663861346637613663323439643731333264383831646137646637396436
+          3461353530386564616339383764303832333332333761340a643437343734643334626631616138
+          34613039383933616539306431616139363535643663373065643763646237343938386265363332
+          3962333439313930630a373031343033393165346662656131643361653162313730396465323264
+          3962333439313930630a373031343033393165346662656131643361653162313730396465323264
+          65643438353136643863333530376537363830346664613761376663346462616462653366643639
+          6336303230373363333533393663626266323539656337313336
+
+smtp_pass: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          32303333346433623861363861626466356331343934626531623633386234646234633066623731
+          6635656463346130326366666663383031393239336665310a393836633138376137666630663739
+          34373539393234363561333066323736646437663463326231383737333865343766363939366136
+          6433396233646365610a373132636633313761333734326237343335633131626364333065636564
+          66386239663337643064346231666163623333356538666363376466343535303165663265623139
+          32613335613262333132323264363964643534646337623938313164333031663736663139623265
+          65346362323331633163663964353134653431653532366266663433373338663064326335306234
+          32393936613964643234
+
+keystore_passwd: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          36353763323034333765386265306165333936303832336336323132616532663739356438356563
+          3066653839656534393538643438633832613138373033310a343538333834383132333966326632
+          63653638313336653638646663633632616165376631303637636238343763613235386239326330
+          3164633530303338640a653036343735633135306539613633356634646233623435373263326435
+          3631
+
+# Cert management stuff
+
+sig_alg: "SHA256WithRSA"
+expire_time: 90
+```
+
+We stored a lot of elements here in the global vars above. Primarily we do this so we can share the variables across multiple roles. These vars however can be very much localized into the role itself. 
+
+The important variables are `smtp_info` as these are the required vars for the `mail` module in ansible. This allows us to email out. Others are the `github_repo` path. This is necessary in order to update our associated github issue. The `github_issue` var and `email_address` var are just populated with default values that we overwrite with our `extra_vars`.
+
+Ansible vault encryption is how we are protecting our passwords and tokens. These entries are encrypted and are decrypted at run time using the ansible secret. That secret is typically stored in Tower or can be stored in a file to reference at run time when using the ansible-playbook command. Other vars like `sig_alg` and `expire_time` are also set to be default values to use when creating new certificates in the keystores.
+
+
+
 Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
 
     - hosts: servers
